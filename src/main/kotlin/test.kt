@@ -1,14 +1,13 @@
 fun readLineTrim() = readLine()!!.trim()
-var loginedMember: Member? = null
 
 fun main() {
 
     println("== SSG시작 ==")
     articleRepository.makeTestArticles()
-    memberRepository.makeTestArticles()
+    memberRepository.makeTestMembers()
     val systemController = SystemController()
-    val articleController = ArticleController()
     val boardController = BoardController()
+    val articleController = ArticleController()
     val memberController = MemberController()
 
     while (true) {
@@ -25,7 +24,6 @@ fun main() {
         when (rq.actionPath) {
 
             "/system/exit" -> {
-
                 systemController.exit(rq)
                 break
             }
@@ -34,14 +32,14 @@ fun main() {
                 articleController.detail(rq)
 
             }
-            "/article/modify" -> {
-
-                articleController.modify(rq)
-
-            }
             "/article/delete" -> {
 
                 articleController.delete(rq)
+
+            }
+            "/article/modify" -> {
+
+                articleController.modify(rq)
 
             }
             "/article/write" -> {
@@ -52,7 +50,6 @@ fun main() {
             "/article/list" -> {
 
                 articleController.list(rq)
-
             }
             "/member/join" -> {
 
@@ -61,7 +58,7 @@ fun main() {
             }
             "/member/login" -> {
 
-                memberController.login(rq)
+               memberController.login(rq)
 
             }
             "/member/logout" -> {
@@ -71,15 +68,27 @@ fun main() {
                 boardController.list(rq)
             }
 
+
         }
 
     }
-    println("== SSG시작 ==")
+    println("== SSG끝 ==")
 }
 
 
-class BoardController {
 
+// 로그인 세션
+var loginedMember: Member? = null
+
+// 시스템 컨트롤러 시작
+class SystemController {
+    fun exit(rq: Rq) {
+        println("프로그램을 종료합니다.")
+    }
+}
+// 시스템 컨트롤러 끝
+
+class BoardController {
     fun list(rq: Rq) {
         println("번호 / 이름 / 코드")
         val boards = boardRepository.getFilteredBoards()
@@ -90,38 +99,107 @@ class BoardController {
     }
 }
 
-class SystemController {
-    fun exit(rq: Rq) {
-        println("프로그램을 종료합니다.")
+// 게시물 컨트롤러 시작
+class ArticleController {
+    fun detail(rq: Rq) {
+        val id = rq.getIntParam("id", 0)
+        if (id == 0) {
+            println("id를 입력해주세요.")
+            return
+        }
+        val article = articleRepository.getArticleById(id)
+        if (article == null) {
+            println("${id}번 게시물이 존재하지않습니다.")
+            return
+        }
+        println("${id}번 게시물 번호: ${article.id}")
+        println("${id}번 게시물 제목: ${article.title}")
+        println("${id}번 게시물 내용: ${article.body}")
+    }
+
+    fun modify(rq: Rq) {
+        if (loginedMember == null) {
+            println("로그인후 이용해주세요.")
+            return
+        }
+
+        val id = rq.getIntParam("id", 0)
+        if (id == 0) {
+            println("id를 입력해주세요.")
+            return
+        }
+        val article = articleRepository.getArticleById(id)
+        if (article == null) {
+            println("${id}번 게시물이 존재하지않습니다.")
+            return
+        }
+
+        if (article.memberId != loginedMember!!.id) {
+            println("권한이 없습니다.")
+            return
+        }
+
+        print("${id}번 게시물 새 제목: ")
+        val title = readLineTrim()
+        print("${id}번 게시물 새 내용: ")
+        val body = readLineTrim()
+
+        articleRepository.modifyArticle(id, title, body)
+        println("${id}번 게시물이 수정되었습니다.")
+    }
+    fun delete(rq: Rq) {
+        if (loginedMember == null) {
+            println("로그인후 이용해주세요..")
+            return
+        }
+
+        val id = rq.getIntParam("id", 0)
+        if (id == 0) {
+            println("id를 입력해주세요.")
+            return
+        }
+        val article = articleRepository.getArticleById(id)
+        if (article == null) {
+            println("${id}번 게시물이 존재하지않습니다.")
+            return
+        }
+        if (article.memberId != loginedMember!!.id) {
+            println("권한이 없습니다.")
+            return
+        }
+
+        articleRepository.deleteArticle(article)
+        println("${id}번 게시물이 삭제되었습니다.")
+    }
+    fun list(rq: Rq) {
+        val page = rq.getIntParam("page", 1)
+        val searchKeyword = rq.getStringParam("searchKeyword", "")
+        val filteredArticles = articleRepository.getFilteredArticles(searchKeyword, page, 10)
+        println("번호 / 제목 / 작성자 / 내용")
+        for (article in filteredArticles) {
+            val writer = memberRepository.getMemberById(article.memberId)!!
+            val writerName = writer.nickname
+            println("${article.id} / ${article.title} / ${writerName} / ${article.body}")
+        }
+    }
+    fun write(rq: Rq) {
+        if (loginedMember == null) {
+            println("로그인후 이용해주세요..")
+            return
+        }
+
+        print("제목: ")
+        val title = readLineTrim()
+        print("내용: ")
+        val body = readLineTrim()
+        val id = articleRepository.addArticles(loginedMember!!.id, title, body)
+        println("${id}번 게시물이 작성되었습니다.")
     }
 }
+// 게시물 컨트롤러 끝
 
+// 회원 컨트롤러 시작
 class MemberController {
-    fun login(rq: Rq) {
-        print("로그인아이디: ")
-        val loginId = readLineTrim()
-        val member = memberRepository.getMemberByLoginId(loginId)
-        if (member == null) {
-            println("${loginId}는 없는 회원의 로그인 아이디입니다.")
-            return
-        }
-
-        print("로그인비밀번호: ")
-        val loginPw = readLineTrim()
-        if (loginPw != member.loginPw) {
-            println("비밀번호가 일치하지 않습니다.")
-            return
-        }
-
-        loginedMember = member
-        println("${member.nickname}님 환영합니다.")
-    }
-
-    fun logout(rq: Rq) {
-        loginedMember = null
-        println("로그아웃되었습니다.")
-    }
-
     fun join(rq: Rq) {
         print("로그인아이디: ")
         val loginId = readLineTrim()
@@ -146,9 +224,48 @@ class MemberController {
         val id = memberRepository.join(loginId, loginPw, name, nickname, phoneNo, email)
         println("${id}번 회원으로 가입되었습니다.")
     }
+    fun login(rq: Rq) {
+        print("로그인아이디: ")
+        val loginId = readLineTrim()
+        val member = memberRepository.getMemberByLoginId(loginId)
+        if (member == null) {
+            println("${loginId}는 없는 회원의 로그인 아이디입니다.")
+            return
+        }
+        print("로그인비밀번호: ")
+        val loginPw = readLineTrim()
+        if (member.loginPw != loginPw) {
+            println("비밀번호가 일치하지않습니다.")
+            return
+        }
+        loginedMember = member
+        println("${member.nickname}님 환영합니다.")
+    }
+    fun logout(rq: Rq) {
+        loginedMember = null
+        println("로그아웃되었습니다.")
+    }
+}
 
+data class Board(
+    val id: Int,
+    val name: String,
+    val code: String
+)
+
+class BoardRepository {
+
+    val boards = mutableListOf<Board>(
+        Board(1, "공지", "notice"),
+        Board(2, "자유", "free")
+    )
+
+    fun getFilteredBoards(): List<Board> {
+        return boards
+    }
 
 }
+val boardRepository = BoardRepository()
 
 data class Member(
     val id: Int,
@@ -166,6 +283,11 @@ class MemberRepository {
         members.add(Member(id, loginId, loginPw, name, nickname, phoneNo, email))
         return id
     }
+    fun makeTestMembers() {
+        for (id in 1 .. 20) {
+            join("user${id}", "user${id}", "홍길동${id}", "사용자${id}", "010${id}", "user${id}@test.com")
+        }
+    }
 
     fun isJoinableLoginId(loginId: String): Boolean {
         val member = getMemberByLoginId(loginId)
@@ -181,12 +303,6 @@ class MemberRepository {
         return null
     }
 
-    fun makeTestArticles() {
-        for (id in 1..20) {
-            join("user${id}", "user${id}", "홍길동${id}", "사용자${id}", "010${id}", "user${id}@test.com")
-        }
-    }
-
     fun getMemberById(id: Int): Member? {
         for (member in members) {
             if (member.id == id) {
@@ -199,7 +315,6 @@ class MemberRepository {
     var lastId = 0
     val members = mutableListOf<Member>()
 }
-
 val memberRepository = MemberRepository()
 
 data class Article(
@@ -208,124 +323,19 @@ data class Article(
     var body: String,
     val memberId: Int
 )
-
-class ArticleController {
-
-    fun detail(rq: Rq) {
-        val id = rq.getIntParam("id", 0)
-        if (id == 0) {
-            println("id를 입력해주세요.")
-            return
-        }
-        val article = articleRepository.getArticleById(id)
-        if (article == null) {
-            println("${id}번 게시물이 존재하지 않습니다.")
-            return
-        }
-        println("번호: ${article.id}")
-        println("제목: ${article.title}")
-        println("내용: ${article.body}")
-    }
-
-    fun delete(rq: Rq) {
-        if (loginedMember == null) {
-            println("로그인후 이용해주세요.")
-            return
-        }
-        val id = rq.getIntParam("id", 0)
-        if (id == 0) {
-            println("id를 입력해주세요.")
-            return
-        }
-        val article = articleRepository.getArticleById(id)
-        if (article == null) {
-            println("${id}번 게시물이 존재하지 않습니다.")
-            return
-        }
-
-        if (loginedMember!!.id != article.memberId) {
-            println("권한이 없습니다.")
-            return
-        }
-
-        articleRepository.deleteArticle(article)
-        println("${id}번 게시물이 삭제되었습니다.")
-    }
-
-    fun modify(rq: Rq) {
-        if (loginedMember == null) {
-            println("로그인후 이용해주세요.")
-            return
-        }
-
-        val id = rq.getIntParam("id", 0)
-        if (id == 0) {
-            println("id를 입력해주세요.")
-            return
-        }
-        val article = articleRepository.getArticleById(id)
-        if (article == null) {
-            println("${id}번 게시물이 존재하지 않습니다.")
-            return
-        }
-
-        if (loginedMember!!.id != article.memberId) {
-            println("권한이 없습니다.")
-            return
-        }
-
-        print("${id}번 게시물 새 제목: ")
-        val title = readLineTrim()
-        print("${id}번 게시물 새 내용: ")
-        val body = readLineTrim()
-
-        articleRepository.modifyArticle(id, title, body)
-        println("${id}번 게시물이 수정되었습니다.")
-    }
-
-    fun write(rq: Rq) {
-        if (loginedMember == null) {
-            println("로그인후 이용해주세요.")
-            return
-        }
-
-        print("제목: ")
-        val title = readLineTrim()
-        print("내용: ")
-        val body = readLineTrim()
-
-        val id = articleRepository.addArticle(loginedMember!!.id, title, body)
-        println("${id}번 게시물이 작성되었습니다.")
-    }
-
-    fun list(rq: Rq) {
-        val page = rq.getIntParam("page", 1)
-        val searchKeyword = rq.getStringParam("searchKeyword", "")
-        val filteredArticles = articleRepository.getFilteredArticles(searchKeyword, page, 10)
-        println("번호 / 제목 / 작성자 / 내용")
-        for (article in filteredArticles) {
-            val writer = memberRepository.getMemberById(article.memberId)!!
-            val writerName = writer.nickname
-            println("${article.id} / ${article.title} / ${writerName} / ${article.body}")
-        }
-    }
-
-}
-
 class ArticleRepository {
 
     var lastId = 0
     val articles = mutableListOf<Article>()
 
-    fun addArticle(memberId: Int, title: String, body: String): Int {
+    fun addArticles(memberId: Int, title: String, body: String): Int {
         val id = ++lastId
         articles.add(Article(id, title, body, memberId))
         return id
     }
-
     fun makeTestArticles() {
-        for (id in 1..100) {
-            addArticle(id % 9 + 1, "제목_$id", "내용_$id")
+        for (id in 1 .. 100) {
+            addArticles(id % 9 + 1, "제목_$id", "내용_$id")
         }
     }
 
@@ -338,14 +348,14 @@ class ArticleRepository {
         return null
     }
 
+    fun deleteArticle(article: Article) {
+        articles.remove(article)
+    }
+
     fun modifyArticle(id: Int, title: String, body: String) {
         val article = getArticleById(id)!!
         article.title = title
         article.body = body
-    }
-
-    fun deleteArticle(article: Article) {
-        articles.remove(article)
     }
 
     fun getFilteredArticles(searchKeyword: String, page: Int, item: Int): List<Article> {
@@ -379,29 +389,6 @@ class ArticleRepository {
     }
 }
 val articleRepository = ArticleRepository()
-
-data class Board(
-    val id: Int,
-    val name: String,
-    val code: String
-)
-
-class BoardRepository {
-
-    val boards = mutableListOf(
-        Board(1, "공지", "notice"),
-        Board(2, "자유", "free")
-    )
-
-    fun getFilteredBoards(): List<Board> {
-        return boards
-    }
-
-
-}
-val boardRepository = BoardRepository()
-
-
 
 class Rq(command: String) {
 

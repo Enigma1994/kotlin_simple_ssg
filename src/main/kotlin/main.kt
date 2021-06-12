@@ -3,13 +3,20 @@ fun readLineTrim() = readLine()!!.trim()
 
 fun main() {
 
-    println("== ssg시작 ==")
-
+    println("== SSG시작 ==")
     articleRepository.makeTestArticles()
+    memberRepository.makeTestMembers()
+    var loginedMember: Member? = null
+
 
     while (true) {
 
-        print("명령어) ")
+        val prompt = if (loginedMember == null) {
+            "명령어) "
+        } else {
+            "${loginedMember.nickname}) "
+        }
+        print(prompt)
         val command = readLineTrim()
         val rq = Rq(command)
 
@@ -20,21 +27,6 @@ fun main() {
                 break
             }
             "/article/detail" -> {
-                val id = rq.getIntParam("id", 0)
-                if (id == 0) {
-                    println("id를 입력해주세요.")
-                    continue
-                }
-                val article = articleRepository.getArticleById(id)
-                if (article == null) {
-                    println("${id}번 게시물이 존재하지 않습니다.")
-                    continue
-                }
-                println("번호: ${article.id}")
-                println("제목: ${article.title}")
-                println("내용: ${article.body}")
-            }
-            "/article/delete" -> {
 
                 val id = rq.getIntParam("id", 0)
                 if (id == 0) {
@@ -43,7 +35,33 @@ fun main() {
                 }
                 val article = articleRepository.getArticleById(id)
                 if (article == null) {
-                    println("${id}번 게시물이 존재하지 않습니다.")
+                    println("${id}번 게시물이 존재하지않습니다.")
+                    continue
+                }
+                println("${id}번 게시물 번호: ${article.id}")
+                println("${id}번 게시물 제목: ${article.title}")
+                println("${id}번 게시물 내용: ${article.body}")
+
+            }
+            "/article/delete" -> {
+
+                if (loginedMember == null) {
+                    println("로그인후 이용해주세요..")
+                    continue
+                }
+
+                val id = rq.getIntParam("id", 0)
+                if (id == 0) {
+                    println("id를 입력해주세요.")
+                    continue
+                }
+                val article = articleRepository.getArticleById(id)
+                if (article == null) {
+                    println("${id}번 게시물이 존재하지않습니다.")
+                    continue
+                }
+                if (article.memberId != loginedMember.id) {
+                    println("권한이 없습니다.")
                     continue
                 }
 
@@ -53,6 +71,11 @@ fun main() {
             }
             "/article/modify" -> {
 
+                if (loginedMember == null) {
+                    println("로그인후 이용해주세요.")
+                    continue
+                }
+
                 val id = rq.getIntParam("id", 0)
                 if (id == 0) {
                     println("id를 입력해주세요.")
@@ -60,7 +83,12 @@ fun main() {
                 }
                 val article = articleRepository.getArticleById(id)
                 if (article == null) {
-                    println("${id}번 게시물이 존재하지 않습니다.")
+                    println("${id}번 게시물이 존재하지않습니다.")
+                    continue
+                }
+
+                if (article.memberId != loginedMember.id) {
+                    println("권한이 없습니다.")
                     continue
                 }
 
@@ -75,11 +103,16 @@ fun main() {
             }
             "/article/write" -> {
 
+                if (loginedMember == null) {
+                    println("로그인후 이용해주세요..")
+                    continue
+                }
+
                 print("제목: ")
                 val title = readLineTrim()
                 print("내용: ")
                 val body = readLineTrim()
-                val id = articleRepository.addArticle(title, body)
+                val id = articleRepository.addArticles(loginedMember.id, title, body)
                 println("${id}번 게시물이 작성되었습니다.")
 
             }
@@ -88,26 +121,144 @@ fun main() {
                 val page = rq.getIntParam("page", 1)
                 val searchKeyword = rq.getStringParam("searchKeyword", "")
                 val filteredArticles = articleRepository.getFilteredArticles(searchKeyword, page, 10)
-                println("번호 / 제목 / 내용")
+                println("번호 / 제목 / 작성자 / 내용")
                 for (article in filteredArticles) {
-                    println("${article.id} / ${article.title} / ${article.body}")
+                    val writer = memberRepository.getMemberById(article.memberId)!!
+                    val writerName = writer.nickname
+                    println("${article.id} / ${article.title} / ${writerName} / ${article.body}")
+                }
+            }
+
+            "/member/join" -> {
+
+                print("로그인아이디: ")
+                val loginId = readLineTrim()
+
+                val isJoinableLoginId = memberRepository.isJoinableLoginId(loginId)
+                if (isJoinableLoginId == false) {
+                    println("${loginId}는 중복된 로그인 아이디입니다.")
+                    continue
                 }
 
+                print("로그인비밀번호: ")
+                val loginPw = readLineTrim()
+                print("이름: ")
+                val name = readLineTrim()
+                print("별명: ")
+                val nickname = readLineTrim()
+                print("휴대전화번호: ")
+                val phoneNo = readLineTrim()
+                print("이메일: ")
+                val email = readLineTrim()
+
+                val id = memberRepository.join(loginId, loginPw, name, nickname, phoneNo, email)
+                println("${id}번 회원으로 가입되었습니다.")
+
+            }
+            "/member/login" -> {
+
+                print("로그인아이디: ")
+                val loginId = readLineTrim()
+                val member = memberRepository.getMemberByLoginId(loginId)
+                if (member == null) {
+                    println("${loginId}는 없는 회원의 로그인 아이디입니다.")
+                    continue
+                }
+                print("로그인비밀번호: ")
+                val loginPw = readLineTrim()
+                if (member.loginPw != loginPw) {
+                    println("비밀번호가 일치하지않습니다.")
+                    continue
+                }
+                loginedMember = member
+                println("${member.nickname}님 환영합니다.")
+
+            }
+            "/member/logout" -> {
+                loginedMember = null
+                println("로그아웃되었습니다.")
             }
 
         }
 
     }
-    println("== ssg끝 ==")
+    println("== SSG끝 ==")
 }
+
+data class Member(
+    val id: Int,
+    val loginId: String,
+    val loginPw: String,
+    val name: String,
+    val nickname: String,
+    val phoneNo: String,
+    val email: String
+)
+
+object memberRepository {
+    fun join(loginId: String, loginPw: String, name: String, nickname: String, phoneNo: String, email: String): Int {
+        val id = ++lastId
+        members.add(Member(id, loginId, loginPw, name, nickname, phoneNo, email))
+        return id
+    }
+    fun makeTestMembers() {
+        for (id in 1 .. 20) {
+            join("user${id}", "user${id}", "홍길동${id}", "사용자${id}", "010${id}", "user${id}@test.com")
+        }
+    }
+
+    fun isJoinableLoginId(loginId: String): Boolean {
+        val member = getMemberByLoginId(loginId)
+        return member == null
+    }
+
+    fun getMemberByLoginId(loginId: String): Member? {
+        for (member in members) {
+            if (member.loginId == loginId) {
+                return member
+            }
+        }
+        return null
+    }
+
+    fun getMemberById(id: Int): Member? {
+        for (member in members) {
+            if (member.id == id) {
+                return member
+            }
+        }
+        return null
+    }
+
+    var lastId = 0
+    val members = mutableListOf<Member>()
+
+
+
+}
+
 
 data class Article(
     val id: Int,
     var title: String,
-    var body: String
+    var body: String,
+    val memberId: Int
 )
-
 object articleRepository {
+
+    var lastId = 0
+    val articles = mutableListOf<Article>()
+
+    fun addArticles(memberId: Int, title: String, body: String): Int {
+        val id = ++lastId
+        articles.add(Article(id, title, body, memberId))
+        return id
+    }
+    fun makeTestArticles() {
+        for (id in 1 .. 100) {
+            addArticles(id % 9 + 1, "제목_$id", "내용_$id")
+        }
+    }
 
     fun getArticleById(id: Int): Article? {
         for (article in articles) {
@@ -120,17 +271,6 @@ object articleRepository {
 
     fun deleteArticle(article: Article) {
         articles.remove(article)
-    }
-
-    fun addArticle(title: String, body: String): Int {
-        val id = ++lastId
-        articles.add(Article(id, title, body))
-        return id
-    }
-    fun makeTestArticles() {
-        for (id in 1 .. 100) {
-            addArticle("제목_${id}", "내용_${id}")
-        }
     }
 
     fun modifyArticle(id: Int, title: String, body: String) {
@@ -168,9 +308,6 @@ object articleRepository {
         }
         return filteredArticles
     }
-
-    var lastId = 0
-    val articles = mutableListOf<Article>()
 
 }
 
@@ -230,4 +367,4 @@ class Rq(command: String) {
         }
     }
 }
- */
+*/
